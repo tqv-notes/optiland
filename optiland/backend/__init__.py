@@ -2,8 +2,8 @@
 Backend Module
 
 Provides a unified module-level interface for numerical operations backed by
-either NumPy or PyTorch. The default backend is NumPy; switch with
-``set_backend('torch')``.
+NumPy, PyTorch or JAX. The default backend is NumPy; switch with
+``set_backend('torch')`` or ``set_backend('jax')``.
 
 Usage::
 
@@ -47,7 +47,11 @@ import numpy as _np
 from optiland._suggest import options_hint
 from optiland.backend.base import BackendCapabilityError  # noqa: F401
 from optiland.backend.numpy_backend import NumpyBackend
-from optiland.backend.utils import is_torch_tensor, to_numpy  # noqa: F401
+from optiland.backend.utils import (  # noqa: F401
+    is_jax_array,
+    is_torch_tensor,
+    to_numpy,
+)
 
 if TYPE_CHECKING:
     from optiland._types import BEArrayT
@@ -113,6 +117,19 @@ try:
 except (ImportError, OSError):
     _torch_available = False
 
+try:
+    import jax as _jax
+
+    from optiland.backend.jax_backend import JaxBackend
+
+    _backends["jax"] = JaxBackend()
+    ndarray = (
+        (*ndarray, _jax.Array) if isinstance(ndarray, tuple) else (ndarray, _jax.Array)
+    )
+    _jax_available = True
+except (ImportError, OSError):
+    _jax_available = False
+
 _current_backend: str = "numpy"
 
 
@@ -143,7 +160,7 @@ def set_backend(name: str) -> None:
         raise ValueError(
             f"Unknown backend {name!r}.{options_hint(str(name), available)} "
             "Install the extra for a missing backend, e.g. "
-            "pip install optiland[torch]."
+            "pip install optiland[torch] or pip install optiland[jax]."
         )
     _current_backend = name
 

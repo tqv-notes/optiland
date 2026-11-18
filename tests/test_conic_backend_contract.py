@@ -107,13 +107,15 @@ def test_geometry_and_backend_import_direction():
 def test_numpy_geometry_import_and_execution_without_torch():
     # A fresh process is essential: pytest's global fixtures already import
     # Torch when installed. Block imports as if the optional package is absent.
+    # JAX is blocked too: it is the other optional backend, and the assertion
+    # below is that NumPy alone is registered.
     script = '''
 import importlib.abc
 import sys
 
 class NoTorch(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname == "torch" or fullname.startswith("torch."):
+        if fullname.split(".")[0] in ("torch", "jax", "jaxlib"):
             raise ModuleNotFoundError("Torch deliberately unavailable", name=fullname)
 
 sys.meta_path.insert(0, NoTorch())

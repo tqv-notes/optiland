@@ -41,6 +41,7 @@ gui = [
     "qtconsole",
 ]
 torch = ["torch"]
+jax = ["jax"]
 
 [project.urls]
 Homepage = "https://github.com/optiland/optiland"

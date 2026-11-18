@@ -353,10 +353,10 @@ def test_unsqueeze_last(set_test_backend):
 def test_to_complex(set_test_backend):
     arr = be.array([1.0, 2.0])
     comp = be.to_complex(arr)
-    if be.get_backend() == "numpy":
-        assert np.iscomplexobj(comp)
-    else:
+    if be.get_backend() == "torch":
         assert comp.is_complex()
+    else:
+        assert np.iscomplexobj(comp)
 
 
 def test_batched_chain_matmul3(set_test_backend):

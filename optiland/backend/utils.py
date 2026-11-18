@@ -10,9 +10,12 @@ Kramer Harrison, 2024
 from __future__ import annotations
 
 import importlib
+import sys
 from typing import TYPE_CHECKING
 
 import numpy as np
+
+from optiland.backend.base import BackendCapabilityError
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -32,7 +35,35 @@ def torch_to_numpy(obj: Tensor) -> NDArray:
     raise TypeError
 
 
-CONVERTERS = [torch_to_numpy]
+def jax_to_numpy(obj: object) -> NDArray:
+    """Convert a JAX array to a NumPy array; raise TypeError otherwise.
+
+    JAX is looked up in ``sys.modules`` and never imported here: an object
+    can only be a JAX array if JAX is already loaded.
+
+    ``stop_gradient`` is the JAX counterpart of ``Tensor.detach()``: inside
+    ``jax.grad`` it gives the concrete value of a differentiated array.
+
+    Raises:
+        TypeError: If obj is not a JAX array.
+        BackendCapabilityError: If obj is traced by ``jax.jit`` or
+            ``jax.vmap``. Such a value has no concrete number to convert.
+    """
+    if not is_jax_array(obj):
+        raise TypeError
+    jax = sys.modules["jax"]
+    try:
+        return np.asarray(jax.lax.stop_gradient(obj))
+    except jax.errors.TracerArrayConversionError as exc:
+        # Not a TypeError: to_numpy would take one for "not my type".
+        raise BackendCapabilityError(
+            "to_numpy cannot convert a value that jax.jit or jax.vmap is "
+            "tracing: it has no concrete number. Convert outside the "
+            "transformed function."
+        ) from exc
+
+
+CONVERTERS = [torch_to_numpy, jax_to_numpy]
 
 
 def to_numpy(obj: ScalarOrArrayT) -> NDArray:
@@ -88,3 +119,16 @@ def is_torch_tensor(obj) -> bool:
 
         return isinstance(obj, torch.Tensor)
     return False
+
+
+def is_jax_array(obj: object) -> bool:
+    """Checks if an object is a JAX array (a concrete array or a tracer).
+
+    Args:
+        obj: The object to check.
+
+    Returns:
+        bool: True if the object is a JAX array, False otherwise.
+    """
+    jax = sys.modules.get("jax")
+    return jax is not None and isinstance(obj, jax.Array)

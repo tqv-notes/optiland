@@ -147,6 +147,68 @@ Example usage:
       VRAM; skipping per-surface snapshots moves that point out by roughly
       3x.
 
+JAX Backend
+-----------
+
+.. note::
+   The JAX backend is experimental. It implements the whole
+   ``AbstractBackend`` contract and traces rays through sequential systems,
+   but parts of Optiland still assign into arrays in place, which JAX does
+   not allow, or have a branch for PyTorch only. Such code raises on JAX.
+
+The JAX backend routes operations through ``jax.numpy``. Install JAX with
+``pip install optiland[jax]`` and select the backend:
+
+.. code:: python
+
+   import optiland.backend as be
+
+   be.set_backend("jax")
+
+It differs from the PyTorch backend in these points:
+
+- **Precision.** The default is ``float64``, as on the NumPy backend. JAX
+  computes in 32 bits unless its ``jax_enable_x64`` flag is set; the backend
+  sets the flag the first time that it creates a ``float64`` array.
+  ``be.set_precision("float32")`` selects single precision.
+- **Immutable arrays.** ``x[mask] = value`` raises on a JAX array. Write
+  ``x = be.where(mask, value, x)``, which works on all backends. For the
+  same reason the backend has no ``be.copy_to``.
+- **Gradients.** JAX has no ``requires_grad`` tensors and no ``backward()``.
+  Write the computation as a function of the parameters and transform it:
+
+  .. code:: python
+
+     import jax
+     from optiland.samples.objectives import CookeTriplet
+
+     def rms_spot(params):
+         radius, thickness = params
+         lens = CookeTriplet()
+         lens.updater.set_radius(radius, 1)
+         lens.updater.set_thickness(thickness, 2)
+         rays = lens.trace(Hx=0, Hy=0.7, wavelength=0.55, num_rays=16,
+                           distribution="hexapolar")
+         cx, cy = be.mean(rays.x), be.mean(rays.y)
+         return be.sqrt(be.mean((rays.x - cx) ** 2 + (rays.y - cy) ** 2))
+
+     gradient = jax.grad(rms_spot)(be.array([22.01359, 6.07]))
+
+  ``be.grad_mode`` exists with the same methods as on PyTorch, so that
+  shared code can ask ``be.grad_mode.requires_grad``; JAX itself ignores it.
+  The optimizers in ``optiland.optimization.optimizer.torch`` need PyTorch.
+- **No ``jax.jit`` around an optic.** Building and tracing an ``Optic``
+  branches in Python on parameter values (for example, whether a radius is
+  infinite) and converts values to NumPy for caches. ``jax.grad`` allows
+  both; ``jax.jit`` and ``jax.vmap`` do not, and raise.
+- **Random numbers.** ``be.default_rng(seed)`` returns a small stateful
+  generator that holds a JAX key and splits it on every draw, so the
+  functions ``be.random_uniform`` and ``be.random_normal`` work as on the
+  other backends.
+- **Device.** JAX places arrays on its default device.
+  ``be.get_device()`` returns its platform, and ``be.set_device("gpu")``
+  selects the first GPU of a JAX installation that has one.
+
 Adding New Functionality
 ------------------------
 
@@ -191,7 +253,7 @@ Troubleshooting
 Potential Future Backends
 -------------------------
 
-- Support for both **JAX** and/or **CuPy** backends are under consideration. If you have experience with these libraries and would like to contribute, please reach out!
+- Support for a **CuPy** backend is under consideration. If you have experience with this library and would like to contribute, please reach out!
 
 .. note::
    For new contributions or questions about the backend layer, please open an issue or pull request on our GitHub repository. We welcome feedback and improvements!
