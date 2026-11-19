@@ -27,3 +27,4 @@ docs/examples/iso10110_output/
 /.compat-venv/
 /compatibility-reports/
 /downloaded-reports/
+demo/output/
