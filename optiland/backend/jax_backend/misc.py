@@ -73,7 +73,7 @@ class MiscMixin:
         Returns:
             jax.Array: Padded array.
         """
-        tensor = self.array(tensor)
+        tensor = self._asjax(tensor)
         if mode == "constant":
             return jnp.pad(
                 tensor, pad_width, mode=mode, constant_values=constant_values
@@ -122,7 +122,7 @@ class MiscMixin:
         Returns:
             tuple[jax.Array, jax.Array]: Bin counts and bin edges.
         """
-        return jnp.histogram(self.array(x), bins=bins)
+        return jnp.histogram(self._asjax(x), bins=bins)
 
     def histogram2d(
         self,
@@ -143,7 +143,7 @@ class MiscMixin:
             tuple[jax.Array, jax.Array, jax.Array]: Histogram, x edges, y edges.
         """
         hist, xedges, yedges = jnp.histogram2d(
-            self.array(x), self.array(y), bins=bins, weights=weights
+            self._asjax(x), self._asjax(y), bins=bins, weights=weights
         )
         return hist, xedges, yedges
 

@@ -129,6 +129,17 @@ try:
     _jax_available = True
 except (ImportError, OSError):
     _jax_available = False
+except Exception as _exc:  # noqa: BLE001
+    # A broken JAX installation, e.g. a jaxlib that does not match jax,
+    # raises at import. It must not stop NumPy users from importing optiland.
+    import warnings as _warnings
+
+    _warnings.warn(
+        f"The JAX backend is not available: {type(_exc).__name__}: {_exc}",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    _jax_available = False
 
 _current_backend: str = "numpy"
 
@@ -162,6 +173,11 @@ def set_backend(name: str) -> None:
             "Install the extra for a missing backend, e.g. "
             "pip install optiland[torch] or pip install optiland[jax]."
         )
+    # A backend that must set up global state of its library when selected
+    # (JAX turns on 64-bit mode) defines a private ``_activate`` method.
+    activate = getattr(_backends[name], "_activate", None)
+    if activate is not None:
+        activate()
     _current_backend = name
 
 

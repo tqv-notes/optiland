@@ -64,6 +64,10 @@ class CapabilitiesMixin:
         """Return the backend name."""
         return "jax"
 
+    def _activate(self) -> None:
+        """Set up JAX when ``be.set_backend("jax")`` selects this backend."""
+        self._config.enable_x64()
+
     # ------------------------------------------------------------------
     # Submodule proxies
     # ------------------------------------------------------------------

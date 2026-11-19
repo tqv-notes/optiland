@@ -25,7 +25,7 @@ class LinalgMixin:
         Returns:
             jax.Array: Matrix product.
         """
-        return jnp.matmul(self.array(a), self.array(b))
+        return jnp.matmul(self._asjax(a), self._asjax(b))
 
     def cross(
         self,
@@ -50,8 +50,8 @@ class LinalgMixin:
             jax.Array: Cross product.
         """
         return jnp.cross(
-            self.array(a),
-            self.array(b),
+            self._asjax(a),
+            self._asjax(b),
             axisa=axisa,
             axisb=axisb,
             axisc=axisc,
@@ -69,7 +69,7 @@ class LinalgMixin:
         Returns:
             jax.Array: Result of a @ b @ c.
         """
-        return jnp.matmul(jnp.matmul(self.array(a), self.array(b)), self.array(c))
+        return jnp.matmul(jnp.matmul(self._asjax(a), self._asjax(b)), self._asjax(c))
 
     def matrix_vector_multiply_and_squeeze(self, p: Any, E: Any) -> Any:
         """Multiply p @ E[..., newaxis] and squeeze the trailing dimension.
@@ -81,7 +81,7 @@ class LinalgMixin:
         Returns:
             jax.Array: Result with trailing dimension squeezed.
         """
-        return jnp.squeeze(jnp.matmul(p, self.array(E)[:, :, None]), axis=2)
+        return jnp.squeeze(jnp.matmul(p, self._asjax(E)[:, :, None]), axis=2)
 
     def mult_p_E(self, p: Any, E: Any) -> Any:
         """Complex matrix-vector multiply used for polarized fields.
@@ -93,7 +93,7 @@ class LinalgMixin:
         Returns:
             jax.Array: Result of complex matrix-vector multiplication.
         """
-        return jnp.squeeze(jnp.matmul(p, self.array(E)[:, :, None]), axis=2)
+        return jnp.squeeze(jnp.matmul(p, self._asjax(E)[:, :, None]), axis=2)
 
     def lstsq(self, a: Any, b: Any) -> Any:
         """Compute the least-squares solution to a @ x = b.
@@ -105,7 +105,7 @@ class LinalgMixin:
         Returns:
             jax.Array: Least-squares solution (N,) or (N, K).
         """
-        return jnp.linalg.lstsq(self.array(a), self.array(b))[0]
+        return jnp.linalg.lstsq(self._asjax(a), self._asjax(b))[0]
 
     def to_complex(self, x: Any) -> Any:
         """Cast a real x to the complex dtype of the current precision.
@@ -116,7 +116,7 @@ class LinalgMixin:
         Returns:
             jax.Array: Complex array. A complex input is returned as it is.
         """
-        x = self.array(x)
+        x = self._asjax(x)
         if jnp.iscomplexobj(x):
             return x
         return x.astype(self._config.complex_dtype())

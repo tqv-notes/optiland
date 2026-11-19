@@ -155,6 +155,8 @@ JAX Backend
    ``AbstractBackend`` contract and traces rays through sequential systems,
    but parts of Optiland still assign into arrays in place, which JAX does
    not allow, or have a branch for PyTorch only. Such code raises on JAX.
+   Non-sequential tracing is not supported and raises
+   ``BackendCapabilityError``.
 
 The JAX backend routes operations through ``jax.numpy``. Install JAX with
 ``pip install optiland[jax]`` and select the backend:
@@ -168,9 +170,12 @@ The JAX backend routes operations through ``jax.numpy``. Install JAX with
 It differs from the PyTorch backend in these points:
 
 - **Precision.** The default is ``float64``, as on the NumPy backend. JAX
-  computes in 32 bits unless its ``jax_enable_x64`` flag is set; the backend
-  sets the flag the first time that it creates a ``float64`` array.
-  ``be.set_precision("float32")`` selects single precision.
+  computes in 32 bits unless its ``jax_enable_x64`` flag is set, so
+  ``be.set_backend("jax")`` sets it. The flag is global to the process: other
+  JAX code in the same program also computes in 64 bits from then on.
+  ``be.set_precision("float32")`` makes the backend create ``float32``
+  arrays; as on the NumPy backend, Python scalars and ``be.arange`` still
+  give ``float64``.
 - **Immutable arrays.** ``x[mask] = value`` raises on a JAX array. Write
   ``x = be.where(mask, value, x)``, which works on all backends. For the
   same reason the backend has no ``be.copy_to``.
@@ -182,9 +187,10 @@ It differs from the PyTorch backend in these points:
      import jax
      from optiland.samples.objectives import CookeTriplet
 
+     lens = CookeTriplet()
+
      def rms_spot(params):
          radius, thickness = params
-         lens = CookeTriplet()
          lens.updater.set_radius(radius, 1)
          lens.updater.set_thickness(thickness, 2)
          rays = lens.trace(Hx=0, Hy=0.7, wavelength=0.55, num_rays=16,
@@ -192,7 +198,16 @@ It differs from the PyTorch backend in these points:
          cx, cy = be.mean(rays.x), be.mean(rays.y)
          return be.sqrt(be.mean((rays.x - cx) ** 2 + (rays.y - cy) ** 2))
 
-     gradient = jax.grad(rms_spot)(be.array([22.01359, 6.07]))
+     params = be.array([22.01359, 6.07])
+     gradient = jax.grad(rms_spot)(params)
+     rms_spot(params)  # put concrete values back into the lens
+
+  The optic is changed in place, so after ``jax.grad`` returns, every
+  parameter that the function set still holds a JAX tracer, which is no
+  longer valid. Using the optic then raises
+  ``jax.errors.UnexpectedTracerError``. Set those parameters again with
+  concrete values, as the last line does, before using the optic outside
+  the transformed function.
 
   ``be.grad_mode`` exists with the same methods as on PyTorch, so that
   shared code can ask ``be.grad_mode.requires_grad``; JAX itself ignores it.

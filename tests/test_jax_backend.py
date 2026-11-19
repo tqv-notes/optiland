@@ -6,10 +6,15 @@ that use the ``set_test_backend`` fixture.
 
 from __future__ import annotations
 
+import subprocess
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 import optiland.backend as be
+from optiland.optic import Optic
 from optiland.samples.objectives import CookeTriplet
 from tests.utils import assert_allclose
 
@@ -44,6 +49,31 @@ def _rms_spot(params):
     return be.sqrt(be.mean((rays.x - cx) ** 2 + (rays.y - cy) ** 2))
 
 
+def _asphere_singlet() -> Optic:
+    """A singlet whose front surface is an even asphere (a Newton-Raphson
+    intersection, not a closed-form conic one)."""
+    lens = Optic()
+    lens.surfaces.add(index=0, thickness=float("inf"))
+    lens.surfaces.add(
+        index=1,
+        radius=25.0,
+        thickness=6.0,
+        material="N-BK7",
+        is_stop=True,
+        surface_type="even_asphere",
+        conic=-0.5,
+        coefficients=[1e-5, 0.0],
+    )
+    lens.surfaces.add(index=2, radius=-75.0, thickness=34.0)
+    lens.surfaces.add(index=3)
+    lens.set_aperture(aperture_type="EPD", value=20)
+    lens.fields.set_type("angle")
+    lens.fields.add(y=0)
+    lens.fields.add(y=5)
+    lens.wavelengths.add(value=0.587, is_primary=True)
+    return lens
+
+
 class TestRegistration:
     def test_is_registered(self):
         assert "jax" in be.list_available_backends()
@@ -69,6 +99,27 @@ class TestRegistration:
 
 
 class TestPrecision:
+    def test_float64_from_the_first_operation(self):
+        # JAX's 64-bit mode is global and already on in this process, so a
+        # fresh one checks that selecting the backend turns it on, before
+        # any array is created.
+        script = "\n".join(
+            [
+                "import optiland.backend as be",
+                "be.set_backend('jax')",
+                "assert be.sqrt(2.0).dtype == 'float64', be.sqrt(2.0).dtype",
+                "assert be.arange(0.0, 1.0, 0.5).dtype == 'float64'",
+            ]
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
     def test_default_is_float64(self):
         assert be.get_precision() == 64
         assert be.array([1.0]).dtype == np.float64
@@ -164,6 +215,14 @@ class TestRandom:
 
 
 class TestNumerics:
+    def test_shape_functions_keep_integer_dtypes(self):
+        # As on the NumPy backend: an index array must stay an index array.
+        indices = np.array([0, 2])
+        assert be.concatenate([indices, indices]).dtype == np.int64
+        assert be.stack([indices, indices]).dtype == np.int64
+        assert be.transpose(np.ones((2, 3), dtype=np.int64)).dtype == np.int64
+        assert be.ravel(indices).dtype == np.float64  # ravel casts, as NumPy
+
     def test_index_add_accumulates_repeated_indices(self):
         out = be.index_add(
             be.zeros((3,)), 0, be.arange_indices(0, 1).repeat(2), be.ones((2,))
@@ -266,3 +325,36 @@ class TestRayTrace:
             high = float(_rms_spot(x0.at[i].add(step)))
             low = float(_rms_spot(x0.at[i].add(-step)))
             assert gradient[i] == pytest.approx((high - low) / (2 * step), rel=1e-6)
+
+    def test_grad_with_a_reused_lens_and_an_asphere(self):
+        # A lens built once and differentiated twice: optiland's caches must
+        # not give jax.grad values from before the traced parameter was set.
+        # The asphere takes the Newton-Raphson intersection.
+        lens = _asphere_singlet()
+
+        def rms_spot(params):
+            lens.updater.set_radius(params[0], 1)
+            lens.updater.set_asphere_coeff(params[1], 1, 0)
+            rays = lens.trace(
+                Hx=0, Hy=1.0, wavelength=0.587, num_rays=6, distribution="hexapolar"
+            )
+            cx, cy = be.mean(rays.x), be.mean(rays.y)
+            return be.sqrt(be.mean((rays.x - cx) ** 2 + (rays.y - cy) ** 2))
+
+        x0 = np.array([25.0, 1e-5])
+        steps = np.array([1e-6, 1e-10])
+        for _ in range(2):
+            gradient = be.to_numpy(jax.grad(rms_spot)(be.array(x0)))
+            for i in range(2):
+                e = np.eye(2)[i] * steps[i]
+                fd = (
+                    float(rms_spot(be.array(x0 + e)))
+                    - float(rms_spot(be.array(x0 - e)))
+                ) / (2 * steps[i])
+                assert gradient[i] == pytest.approx(fd, rel=1e-6)
+
+    def test_non_sequential_tracing_raises_a_clear_error(self):
+        from optiland.nonsequential.tracer import _default_backend
+
+        with pytest.raises(be.BackendCapabilityError, match="Non-sequential"):
+            _default_backend(seed=0)

@@ -20,6 +20,21 @@ if TYPE_CHECKING:
 class CreationMixin:
     """Array creation operations."""
 
+    def _asjax(self, x: Any) -> Any:
+        """Return x as a JAX array with its own dtype, as NumPy functions do.
+
+        ``array`` casts to the float precision, which suits creation but not
+        shape, reduction or linear-algebra functions: NumPy keeps an integer
+        index array an integer array, and so does this backend.
+
+        Args:
+            x: An array, a scalar, or a (nested) list of them.
+
+        Returns:
+            jax.Array: x itself if it is a JAX array, else ``jnp.asarray(x)``.
+        """
+        return x if isinstance(x, jax.Array) else jnp.asarray(x)
+
     def array(self, x: Any) -> Any:
         """Create a JAX array with the current precision.
 

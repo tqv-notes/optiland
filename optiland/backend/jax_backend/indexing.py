@@ -112,9 +112,11 @@ class IndexingMixin:
             x: Input array or scalar.
 
         Returns:
-            jax.Array: 1-D array.
+            jax.Array: 1-D array; real input is cast to the float precision,
+                as on the NumPy backend, and complex input stays complex.
         """
-        return jnp.ravel(self.array(x))
+        x = jnp.ravel(self._asjax(x))
+        return x if jnp.issubdtype(x.dtype, jnp.inexact) else x.astype(self._dtype)
 
     # ------------------------------------------------------------------
     # Shape and indexing
@@ -130,7 +132,7 @@ class IndexingMixin:
         Returns:
             jax.Array: Transposed array.
         """
-        return jnp.transpose(self.array(x), axes)
+        return jnp.transpose(self._asjax(x), axes)
 
     def reshape(self, x: Any, shape: Sequence[int]) -> Any:
         """Return x with a new shape.
@@ -142,7 +144,7 @@ class IndexingMixin:
         Returns:
             jax.Array: Reshaped array.
         """
-        return jnp.reshape(self.array(x), shape)
+        return jnp.reshape(self._asjax(x), shape)
 
     def atleast_1d(self, x: Any) -> Any:
         """Convert x to a float array with at least one dimension.
@@ -164,7 +166,7 @@ class IndexingMixin:
         Returns:
             jax.Array: Array with at least 2 dimensions.
         """
-        return jnp.atleast_2d(self.array(x))
+        return jnp.atleast_2d(self._asjax(x))
 
     def as_array_1d(self, data: Any) -> Any:
         """Force conversion to a 1-D array.
@@ -198,7 +200,7 @@ class IndexingMixin:
         Returns:
             jax.Array: Stacked array.
         """
-        return jnp.stack([self.array(x) for x in xs], axis=axis)
+        return jnp.stack([self._asjax(x) for x in xs], axis=axis)
 
     def concatenate(self, arrays: Sequence[Any], axis: int = 0) -> Any:
         """Join arrays along an existing axis.
@@ -210,7 +212,7 @@ class IndexingMixin:
         Returns:
             jax.Array: Concatenated array.
         """
-        return jnp.concatenate([self.array(x) for x in arrays], axis=axis)
+        return jnp.concatenate([self._asjax(x) for x in arrays], axis=axis)
 
     def flip(self, x: Any) -> Any:
         """Reverse the order of elements along axis 0.
@@ -221,7 +223,7 @@ class IndexingMixin:
         Returns:
             jax.Array: Flipped array.
         """
-        return jnp.flip(self.array(x), axis=0)
+        return jnp.flip(self._asjax(x), axis=0)
 
     def roll(self, x: Any, shift: Any, axis: Any = ()) -> Any:
         """Roll x elements along the given axis.
@@ -234,7 +236,7 @@ class IndexingMixin:
         Returns:
             jax.Array: Rolled array.
         """
-        return jnp.roll(self.array(x), shift, axis=axis if axis != () else None)
+        return jnp.roll(self._asjax(x), shift, axis=axis if axis != () else None)
 
     def repeat(self, x: Any, repeats: int) -> Any:
         """Repeat elements of x.
@@ -246,7 +248,7 @@ class IndexingMixin:
         Returns:
             jax.Array: Repeated array.
         """
-        return jnp.repeat(self.array(x), repeats)
+        return jnp.repeat(self._asjax(x), repeats)
 
     def broadcast_to(self, x: Any, shape: Sequence[int]) -> Any:
         """Broadcast x to the given shape.
@@ -258,7 +260,7 @@ class IndexingMixin:
         Returns:
             jax.Array: Broadcast array.
         """
-        return jnp.broadcast_to(self.array(x), shape)
+        return jnp.broadcast_to(self._asjax(x), shape)
 
     def tile(self, x: Any, dims: Any) -> Any:
         """Construct an array by tiling x.
@@ -270,7 +272,7 @@ class IndexingMixin:
         Returns:
             jax.Array: Tiled array.
         """
-        return jnp.tile(self.array(x), dims)
+        return jnp.tile(self._asjax(x), dims)
 
     def expand_dims(self, x: Any, axis: int) -> Any:
         """Insert a new axis into x.
@@ -282,7 +284,7 @@ class IndexingMixin:
         Returns:
             jax.Array: Expanded array.
         """
-        return jnp.expand_dims(self.array(x), axis)
+        return jnp.expand_dims(self._asjax(x), axis)
 
     def meshgrid(self, *arrays: Any) -> tuple[Any, ...]:
         """Return coordinate matrices from coordinate vectors (xy indexing).
@@ -293,7 +295,7 @@ class IndexingMixin:
         Returns:
             tuple[jax.Array, ...]: Coordinate matrices.
         """
-        return tuple(jnp.meshgrid(*(self.array(a) for a in arrays), indexing="xy"))
+        return tuple(jnp.meshgrid(*(self._asjax(a) for a in arrays), indexing="xy"))
 
     def unsqueeze_last(self, x: Any) -> Any:
         """Add a trailing dimension to x.
@@ -304,7 +306,7 @@ class IndexingMixin:
         Returns:
             jax.Array: Array with an extra trailing dimension.
         """
-        return self.array(x)[..., None]
+        return self._asjax(x)[..., None]
 
     def index_add(self, target: Any, dim: int, index: Any, source: Any) -> Any:
         """Scatter-add: result[index[i]] += source[i] along dim.

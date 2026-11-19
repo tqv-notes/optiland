@@ -13,8 +13,9 @@ Differences from the torch backend that callers see:
   ``x = be.where(mask, value, x)``.
 - Derivatives come from function transformations (``jax.grad``,
   ``jax.jacfwd``), not from ``requires_grad`` tensors and ``backward()``.
-- The default precision is float64, as on the NumPy backend. It sets JAX's
-  ``jax_enable_x64`` flag the first time that the backend creates an array.
+- The default precision is float64, as on the NumPy backend.
+  ``set_backend("jax")`` sets JAX's global ``jax_enable_x64`` flag.
+- Non-sequential tracing is not supported.
 """
 
 from __future__ import annotations

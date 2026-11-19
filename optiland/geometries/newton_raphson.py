@@ -116,6 +116,9 @@ def _put(values, mask, part):
     """
     if be.get_backend() == "torch":
         return values.masked_scatter(mask, part)
+    if be.get_backend() == "jax":
+        # JAX arrays are immutable; .at[] returns the updated copy.
+        return values.at[mask].set(part)
     result = values.copy()
     result[mask] = part
     return result

@@ -68,23 +68,29 @@ class _Config:
             raise ValueError("Precision must be 'float32' or 'float64'.")
         self.precision = precision
 
-    def dtype(self) -> type:
-        """Return the JAX float dtype of the current precision.
+    @staticmethod
+    def enable_x64() -> None:
+        """Turn on JAX's 64-bit mode, which is off by default.
 
-        JAX computes in 32 bits unless its ``jax_enable_x64`` flag is set.
-        The flag is set here, the first time that float64 is needed, and not
-        when optiland is imported: a program that has JAX installed but does
-        not use this backend keeps its JAX configuration.
+        Without it JAX computes in 32 bits, even for float64 requests. The
+        flag is global to the process. It is set when the backend is
+        selected (``be.set_backend("jax")``) and not when optiland is
+        imported, so a program that has JAX installed but does not use this
+        backend keeps its own JAX configuration. In 64-bit mode Python
+        scalars and ``arange`` give float64, as on the NumPy backend; the
+        ``float32`` precision still applies to every array the backend
+        creates.
         """
-        if self.precision == "float32":
-            return jnp.float32
         if not jax.config.jax_enable_x64:
             jax.config.update("jax_enable_x64", True)
-        return jnp.float64
+
+    def dtype(self) -> type:
+        """Return the JAX float dtype of the current precision."""
+        # Also when the backend instance is used without set_backend.
+        self.enable_x64()
+        return jnp.float32 if self.precision == "float32" else jnp.float64
 
     def complex_dtype(self) -> type:
         """Return the complex dtype that matches the current precision."""
-        if self.precision == "float32":
-            return jnp.complex64
-        self.dtype()  # float64 and complex128 need the x64 flag
-        return jnp.complex128
+        self.enable_x64()
+        return jnp.complex64 if self.precision == "float32" else jnp.complex128

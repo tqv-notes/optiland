@@ -28,7 +28,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Sum of x.
         """
-        return jnp.sum(self.array(x), axis=axis)
+        return jnp.sum(self._asjax(x), axis=axis)
 
     def mean(self, x: Any, axis: int | None = None, keepdims: bool = False) -> Any:
         """Compute the arithmetic mean along an axis.
@@ -41,7 +41,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Mean of x.
         """
-        return jnp.mean(self.array(x), axis=axis, keepdims=keepdims)
+        return jnp.mean(self._asjax(x), axis=axis, keepdims=keepdims)
 
     def std(self, x: Any, axis: int | None = None) -> Any:
         """Compute the standard deviation along an axis.
@@ -53,7 +53,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Standard deviation.
         """
-        return jnp.std(self.array(x), axis=axis)
+        return jnp.std(self._asjax(x), axis=axis)
 
     def max(self, x: Any) -> Any:
         """Return the maximum value of x.
@@ -64,7 +64,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Maximum value, 0-dimensional.
         """
-        return jnp.max(self.array(x))
+        return jnp.max(self._asjax(x))
 
     def min(self, x: Any) -> Any:
         """Return the minimum value of x.
@@ -75,7 +75,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Minimum value, 0-dimensional.
         """
-        return jnp.min(self.array(x))
+        return jnp.min(self._asjax(x))
 
     def argmin(self, x: Any, axis: int | None = None) -> Any:
         """Return indices of the minimum values along an axis.
@@ -87,7 +87,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Index array.
         """
-        return jnp.argmin(self.array(x), axis=axis)
+        return jnp.argmin(self._asjax(x), axis=axis)
 
     def argwhere(self, x: Any) -> Any:
         """Return indices of non-zero elements.
@@ -101,7 +101,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Index array of shape (N, ndim).
         """
-        return jnp.argwhere(self.array(x))
+        return jnp.argwhere(self._asjax(x))
 
     def clip(self, x: Any, a_min: Any, a_max: Any) -> Any:
         """Clip values in x to [a_min, a_max].
@@ -114,7 +114,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Clipped array.
         """
-        return jnp.clip(self.array(x), a_min, a_max)
+        return jnp.clip(self._asjax(x), a_min, a_max)
 
     def where(self, condition: Any, x: Any, y: Any) -> Any:
         """Return elements from x or y depending on condition.
@@ -141,7 +141,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Element-wise maximum.
         """
-        return jnp.maximum(self.array(a), self.array(b))
+        return jnp.maximum(self._asjax(a), self._asjax(b))
 
     def minimum(self, a: Any, b: Any) -> Any:
         """Element-wise minimum of a and b.
@@ -153,7 +153,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Element-wise minimum.
         """
-        return jnp.minimum(self.array(a), self.array(b))
+        return jnp.minimum(self._asjax(a), self._asjax(b))
 
     def fmax(self, a: Any, b: Any) -> Any:
         """Element-wise maximum, ignoring NaNs.
@@ -165,7 +165,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Element-wise maximum ignoring NaN.
         """
-        return jnp.fmax(self.array(a), self.array(b))
+        return jnp.fmax(self._asjax(a), self._asjax(b))
 
     def power(self, x: Any, y: Any) -> Any:
         """Return x raised to the power y.
@@ -177,7 +177,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: x ** y.
         """
-        return jnp.power(self.array(x), self.array(y))
+        return jnp.power(self._asjax(x), self._asjax(y))
 
     def diff(self, x: Any, n: int = 1, axis: int = -1, **kwargs: Any) -> Any:
         """Calculate the n-th discrete difference along the given axis.
@@ -192,7 +192,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Differences array.
         """
-        return jnp.diff(self.array(x), n=n, axis=axis, **kwargs)
+        return jnp.diff(self._asjax(x), n=n, axis=axis, **kwargs)
 
     def all(self, x: Any, axis: int | tuple[int, ...] | None = None) -> Any:
         """Return True if all elements of x are True.
@@ -235,7 +235,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Maximum value ignoring NaN.
         """
-        return jnp.nanmax(self.array(x), axis=axis, keepdims=keepdim)
+        return jnp.nanmax(self._asjax(x), axis=axis, keepdims=keepdim)
 
     def sort(self, x: Any, axis: int = -1) -> Any:
         """Return a sorted copy of x.
@@ -247,7 +247,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Sorted array.
         """
-        return jnp.sort(self.array(x), axis=axis)
+        return jnp.sort(self._asjax(x), axis=axis)
 
     def isclose(self, a: Any, b: Any, rtol: float = 1e-5, atol: float = 1e-8) -> Any:
         """Return a boolean array where elements are close.
@@ -261,7 +261,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Boolean array.
         """
-        return jnp.isclose(self.array(a), self.array(b), rtol=rtol, atol=atol)
+        return jnp.isclose(self._asjax(a), self._asjax(b), rtol=rtol, atol=atol)
 
     def radians(self, x: Any) -> Any:
         """Convert angles from degrees to radians.
@@ -272,7 +272,7 @@ class ReductionsMixin:
         Returns:
             jax.Array: Angle in radians.
         """
-        return jnp.radians(self.array(x))
+        return jnp.radians(self._asjax(x))
 
     def degrees(self, x: Any) -> Any:
         """Convert angles from radians to degrees.
@@ -283,4 +283,4 @@ class ReductionsMixin:
         Returns:
             jax.Array: Angle in degrees.
         """
-        return jnp.degrees(self.array(x))
+        return jnp.degrees(self._asjax(x))

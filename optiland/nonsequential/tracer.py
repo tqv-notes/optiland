@@ -198,8 +198,18 @@ def _default_backend(seed: int | None) -> TracerBackend:
 
     Returns:
         NumpyBackend or TorchBackend depending on the active backend.
+
+    Raises:
+        BackendCapabilityError: On the JAX backend, which has no
+            non-sequential tracer.
     """
     import optiland.backend as be  # noqa: PLC0415
+
+    if be.get_backend() == "jax":
+        raise be.BackendCapabilityError(
+            "Non-sequential tracing is not supported by backend 'jax'. "
+            "Use be.set_backend('numpy') or be.set_backend('torch')."
+        )
 
     if be.get_backend() == "torch":
         from optiland.nonsequential.backends.torch_backend import (  # noqa: PLC0415
