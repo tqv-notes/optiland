@@ -13,3 +13,5 @@ lens.wavelengths.add(value=0.587, is_primary=True)
 
 lens.draw()                       # 2D layout with traced rays
 print(lens.paraxial.f2())         # effective focal length -> 37.04 mm
+
+lens.draw3D()                     # 3D layout with traced rays

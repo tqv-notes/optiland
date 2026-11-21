@@ -20,6 +20,15 @@ reproduced here. If you have that file, or any other Zemax file, pass it in:
 
     python demo/wide_angle_tutorial.py --zmx path/to/US08416512-1.ZMX --fnumbers 1.5 4
 
+A .ZMX file names its glasses but does not contain their data. Glasses that
+are not in optiland's catalogs get the file's placeholder n = 1.5 (the script
+warns about it). Supply the catalogs with ``--agf FOLDER``, or substitute
+glasses from optiland's database with ``--glass SURFACE=NAME``. For the patent
+file, H-ZLAF53 and LASFN7 are missing:
+
+    python demo/wide_angle_tutorial.py --zmx path/to/US08416512-1.ZMX \
+        --glass 2=H-ZLAF53 4=LASFN7 17=LASFN7 --fnumbers 1.5 4
+
 Without ``--zmx`` the script uses optiland's built-in ``WideAngle100FOV``: an
 inverse-telephoto (retrofocus) lens with a 100 degree full field at F/4, from
 M. Laikin, *Lens Design*, 4th ed., p. 108 -- the same family of design that
@@ -55,6 +64,21 @@ import numpy as np
 parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
 parser.add_argument("--zmx", type=Path, help="Zemax .zmx file to load instead")
 parser.add_argument(
+    "--agf",
+    type=Path,
+    nargs="+",
+    help="folder(s) with Zemax AGF glass catalogs for --zmx (the catalogs "
+    "named on the file's GCAT line, e.g. from the design's ZAR archive)",
+)
+parser.add_argument(
+    "--glass",
+    nargs="+",
+    default=[],
+    metavar="SURFACE=NAME",
+    help="replace the glass after a surface with one from optiland's "
+    "database, e.g. --glass 2=H-ZLAF53 4=LASFN7",
+)
+parser.add_argument(
     "--efl",
     type=float,
     default=24.67,
@@ -82,6 +106,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import optiland.backend as be  # noqa: E402
 from optiland.analysis import Distortion, FieldCurvature, SpotDiagram  # noqa: E402
 from optiland.fileio import load_zemax_file  # noqa: E402
+from optiland.materials import AbbeMaterial, Material  # noqa: E402
 from optiland.mtf import FFTMTF  # noqa: E402
 from optiland.samples.objectives import WideAngle100FOV  # noqa: E402
 
@@ -112,11 +137,37 @@ def section(title: str) -> None:
 
 section("1. Starting point")
 if args.zmx:
-    lens = load_zemax_file(str(args.zmx))
+    agf_dirs = [str(p) for p in args.agf] if args.agf else None
+    lens = load_zemax_file(str(args.zmx), agf_dirs=agf_dirs)
     print(f"loaded {args.zmx}")
 else:
     lens = WideAngle100FOV()
     print("built-in WideAngle100FOV (Laikin, 100 deg full field, F/4)")
+
+for item in args.glass:
+    surface, name = item.split("=", 1)
+    lens.updater.set_material(Material(name), int(surface))
+    n_d = float(np.ravel(be.to_numpy(Material(name).n(0.5875618)))[0])
+    print(f"surface {surface}: glass {name} from the database (n_d = {n_d:.5f})")
+
+# A Zemax file does not store glass data: each GLAS line holds the glass name
+# and placeholder values (nd = 1.5, vd = 40 when the glass comes from a
+# catalog). A glass that is in none of the catalogs available to optiland is
+# therefore modelled with n = 1.5, which ruins the design. Report them.
+placeholders = [
+    i
+    for i, s in enumerate(lens.surfaces)
+    if isinstance(s.material_post, AbbeMaterial)
+    and np.allclose(be.to_numpy(s.material_post.index), 1.5)
+    and np.allclose(be.to_numpy(s.material_post.abbe), 40.0)
+]
+if placeholders:
+    print(
+        f"\nWARNING: the glass after surface(s) {placeholders} uses the file's "
+        "placeholder nd = 1.5, vd = 40,\nbecause it is not in any catalog "
+        "available. The results will be wrong. Pass the\nAGF catalogs with "
+        "--agf, or replace the glass with --glass SURFACE=NAME.\n"
+    )
 
 # Wide-angle lenses bend the chief ray strongly, and their entrance pupil moves
 # with field angle. The 'robust' ray-aiming mode finds the real stop position
@@ -202,7 +253,7 @@ for i in range(1, lens.surfaces.num_surfaces):
 # ray is first aimed through the real stop by a few Newton iterations, each a
 # full trace, so this takes several times longer than a plain trace.
 start = time.perf_counter()
-rays = lens.trace(Hx=0.0, Hy=0.7, wavelength=primary, num_rays=512,
+rays = lens.trace(Hx=0.0, Hy=0.7, wavelength=primary, num_rays=256,
                   distribution="uniform")
 n = be.to_numpy(rays.x).size
 print(f"\naimed and traced {n:,} rays through {num_lens_surfaces} surfaces "
@@ -232,7 +283,15 @@ def evaluate(fno: float) -> np.ndarray:
     print(f"  {'field':>8}{'RMS radius [um]':>18}{'GEO radius [um]':>18}")
     for f, r, g in zip(lens.fields, rms_poly, geo.max(axis=1) * 1e3, strict=True):
         print(f"  {f.y:>8.2f}{r:>18.3f}{g:>18.3f}")
-    fig, _ = spot.view(add_airy_disk=True, show=False)
+    # The Airy-disc overlay traces the four marginal rays of the full pupil.
+    # In a vignetted design some of them cannot pass the lens; then the
+    # diagram is drawn without it.
+    try:
+        fig, _ = spot.view(add_airy_disk=True, show=False)
+    except ValueError as exc:
+        print(f"  (no Airy disc in the plot: {exc})")
+        plt.close("all")
+        fig, _ = spot.view(show=False)
     fig.suptitle(f"Spot diagram, F/{fno:g}", y=1.04)
     save(fig, f"2_spot_{tag}")
 
@@ -255,7 +314,22 @@ elif args.zmx:
 else:
     fnumbers = [2.0, 4.0]
 
-results = {fno: evaluate(fno) for fno in fnumbers}
+fnumbers = list(dict.fromkeys(fnumbers))  # drop repeats, keep the order
+design_fno = float(lens.paraxial.FNO())
+results = {}
+for fno in fnumbers:
+    # A lens cannot be opened far beyond its design aperture: the larger
+    # bundle no longer fits through the elements, ray aiming fails, and the
+    # analyses cannot run. Such an F-number is reported and skipped.
+    try:
+        results[fno] = evaluate(fno)
+    except ValueError as exc:
+        plt.close("all")
+        print(f"  F/{fno:g} skipped: {exc}")
+        print(f"  (this lens was designed for F/{design_fno:g}; much faster "
+              "apertures do not fit through it)")
+fnumbers = list(results)
+lens.set_aperture("imageFNO", design_fno)
 
 print("\nPolychromatic RMS spot radius [um]:")
 print(f"{'field':>8}" + "".join(f"{'F/' + format(f, 'g'):>10}" for f in fnumbers))
